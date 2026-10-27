@@ -344,6 +344,92 @@ write_allow "$GKH" gk
 expect_fail 'json artifact host mismatch' 'artifact host' verify "$GKH"
 rm -rf "$GKH"
 
+ST=$(mktemp -d)
+mkdir -p "$ST/packages/studio"
+cat >"$ST/page.html" <<EOF
+<table>
+<tr><td>deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef</td></tr>
+<tr><td><button>android-studio-old-linux.tar.gz</button></td><td>$H64A</td></tr>
+</table>
+<a href="https://edgedl.me.gvt1.com/android/studio/ide-zips/1.2.0/android-studio-old-linux.tar.gz">download</a>
+EOF
+cat >"$ST/packages/studio/PKGBUILD" <<EOF
+pkgname=studio
+pkgver=1.2.0
+pkgrel=1
+_archive=android-studio-old-linux.tar.gz
+arch=('x86_64')
+source=("https://edgedl.me.gvt1.com/android/studio/ide-zips/\${pkgver}/\${_archive}")
+sha256sums=('$H64A')
+EOF
+cat >"$ST/packages/studio/upstream" <<EOF
+host=gvt1.com
+sums_url=file://${ST}/page.html
+sums_format=studio-download-html
+sums_glob=android-studio-*-linux.tar.gz
+version_regex=ide-zips/([0-9.]+)/android-studio-
+EOF
+write_allow "$ST" studio
+expect_ok 'studio-download-html verify' verify "$ST"
+
+sed -i "s/^sha256sums=.*/sha256sums=('$H64D')/" "$ST/packages/studio/PKGBUILD"
+expect_fail 'studio-download-html hash mismatch' 'sha256' verify "$ST"
+sed -i "s/^sha256sums=.*/sha256sums=('$H64A')/" "$ST/packages/studio/PKGBUILD"
+
+sed -i 's/^_archive=.*/_archive=android-studio-nope-linux.tar.gz/' "$ST/packages/studio/PKGBUILD"
+expect_fail 'studio source URL must match page' 'source URL' verify "$ST"
+sed -i 's/^_archive=.*/_archive=android-studio-old-linux.tar.gz/' "$ST/packages/studio/PKGBUILD"
+
+printf '%s\n' '<a href="https://edgedl.me.gvt1.com/android/studio/ide-zips/9.9.9/android-studio-other-linux.tar.gz">x</a>' >>"$ST/page.html"
+expect_fail 'studio two linux URLs' 'one linux' verify "$ST"
+sed -i '/9.9.9/d' "$ST/page.html"
+
+expect_ok 'studio-download-html propose' propose "$ST" studio
+if grep -q '^pkgver=1.2.0$' "$ST/packages/studio/PKGBUILD" && grep -q '^_archive=android-studio-old-linux.tar.gz$' "$ST/packages/studio/PKGBUILD"; then
+  ok 'studio propose keeps current version'
+else
+  bad "studio propose rewrote current: $(tr '\n' ' ' <"$ST/packages/studio/PKGBUILD")"
+fi
+
+cat >"$ST/page.html" <<EOF
+<button>android-studio-rabbit1-linux.tar.gz</button>
+<td>$H64B</td>
+<a href="https://edgedl.me.gvt1.com/android/studio/ide-zips/2026.2.1.8/android-studio-rabbit1-linux.tar.gz">download</a>
+EOF
+sed -i 's/^pkgrel=.*/pkgrel=3/' "$ST/packages/studio/PKGBUILD"
+expect_ok 'studio-download-html propose bump' propose "$ST" studio
+if grep -q '^pkgver=2026.2.1.8$' "$ST/packages/studio/PKGBUILD"; then
+  ok 'studio bumped to 2026.2.1.8'
+else
+  bad "studio pkgver=$(company_pkgbuild_get "$ST/packages/studio/PKGBUILD" pkgver)"
+fi
+if grep -q '^_archive=android-studio-rabbit1-linux.tar.gz$' "$ST/packages/studio/PKGBUILD"; then
+  ok 'studio _archive follows download page'
+else
+  bad 'studio _archive not updated'
+fi
+if grep -q "sha256sums=('$H64B')" "$ST/packages/studio/PKGBUILD"; then
+  ok 'studio sha follows download page'
+else
+  bad 'studio sha not updated'
+fi
+if grep -q '^pkgrel=1$' "$ST/packages/studio/PKGBUILD"; then
+  ok 'studio version bump resets pkgrel'
+else
+  bad 'studio pkgrel not reset'
+fi
+expect_ok 'studio-download-html verify latest' verify "$ST"
+expect_ok 'studio-download-html propose current' propose "$ST" studio
+if grep -q 'CURRENT studio 2026.2.1.8' /tmp/cap-out; then
+  ok 'studio propose reports CURRENT'
+else
+  bad "studio propose current: $(tr '\n' ' ' </tmp/cap-out)"
+fi
+
+sed -i 's|edgedl.me.gvt1.com|evil.example|' "$ST/page.html"
+expect_fail 'studio artifact host mismatch' 'artifact host' verify "$ST"
+rm -rf "$ST"
+
 expect_ok 'real allowlist PKGBUILDs' bash "$REPO/scripts/verify-pkgbuild.sh"
 
 printf '%s passed, %s failed\n' "$PASS" "$FAIL"

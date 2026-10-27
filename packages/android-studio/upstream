@@ -1,0 +1,11 @@
+# Vendor checksum gate. Required next to PKGBUILD.
+# Google publishes the linux tarball URL and its sha256 on the download page.
+# There is no separate checksums file. The filename slug (rabbit1, …) is not
+# the version; propose rewrites pkgver, _archive, and sha256sums together.
+# The source= host prefix stays in the PKGBUILD.
+host=gvt1.com
+sums_host=developer.android.com
+sums_url=https://developer.android.com/studio
+sums_format=studio-download-html
+sums_glob=android-studio-*-linux.tar.gz
+version_regex=ide-zips/([0-9.]+)/android-studio-[A-Za-z0-9._-]+-linux\.tar\.gz

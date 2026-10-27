@@ -28,3 +28,8 @@ regex = 'hll9310cdwcupswrapper-([0-9.]+)-3\.i386\.rpm'
 source = "regex"
 url = "https://api.gitkraken.dev/releases/production/linux/x64/RELEASES"
 regex = '"name":"([0-9.]+)"'
+
+[android-studio]
+source = "regex"
+url = "https://developer.android.com/studio"
+regex = 'ide-zips/([0-9.]+)/android-studio-[A-Za-z0-9._-]+-linux\.tar\.gz'

@@ -63,6 +63,68 @@ verify_json_name_targz() {
   [[ "${sha,,}" == "${vendor,,}" ]] || company_fail "$name: PKGBUILD sha256 $sha != vendor $vendor"
 }
 
+# sums_format=studio-download-html: version, URL, and sha256 come from the
+# download page. PKGBUILD source= expands ${pkgver} and ${_archive} to that URL.
+verify_studio_download_html() {
+  local name=$1 pkgver=$2 sha=$3 host=$4
+  local pkg up sums_url sums_glob version_regex tmp err parsed body captured
+  local ver url art_sha base art_host want src expanded reason
+  pkg=$(company_pkgbuild_file "$name")
+  up=$(company_upstream_file "$name")
+  sums_url=$(company_kv_get "$up" sums_url)
+  sums_glob=$(company_kv_get "$up" sums_glob)
+  version_regex=$(company_kv_get "$up" version_regex)
+  tmp=$(mktemp)
+  err=$(mktemp)
+  parsed=$(mktemp)
+  company_fetch "$sums_url" "$tmp" || {
+    rm -f "$tmp" "$err" "$parsed"
+    company_fail "$name: could not fetch $sums_url"
+  }
+  body=$(tr -d '\n' <"$tmp")
+  if [[ ! "$body" =~ $version_regex ]]; then
+    rm -f "$tmp" "$err" "$parsed"
+    company_fail "$name: version_regex did not match $sums_url"
+  fi
+  captured="${BASH_REMATCH[1]}"
+  if ! company_studio_download_linux "$tmp" >"$parsed" 2>"$err"; then
+    reason=$(tr '\n' ' ' <"$err")
+    rm -f "$tmp" "$err" "$parsed"
+    company_fail "$name: ${reason:-bad Android Studio download page}"
+  fi
+  rm -f "$tmp" "$err"
+  {
+    read -r ver
+    read -r url
+    read -r art_sha
+    read -r base
+  } <"$parsed"
+  rm -f "$parsed"
+  [[ -n "$ver" && -n "$url" && -n "$art_sha" && -n "$base" ]] || \
+    company_fail "$name: bad Android Studio download page"
+  if [[ "$captured" != "$ver" ]]; then
+    company_fail "$name: version_regex captured $captured but download page version is $ver"
+  fi
+  [[ "$pkgver" == "$ver" ]] || company_fail "$name: pkgver $pkgver is not download page $ver"
+  if [[ "$url" != file://* ]]; then
+    art_host=$(company_url_host "$url")
+    company_host_ok "$art_host" "$host" || company_fail "$name: artifact host $art_host is not $host"
+  fi
+  company_url_scheme_ok "$url" || company_fail "$name: artifact URL must be https:// (got $url)"
+  want=$(company_expand_glob "$sums_glob" "$pkgver")
+  company_basename_matches_glob "$base" "$want" || \
+    company_fail "$name: artifact basename $base is not $want"
+  [[ "${sha,,}" == "$art_sha" ]] || company_fail "$name: PKGBUILD sha256 $sha != vendor $art_sha"
+  mapfile -t src < <(company_source_urls "$pkg")
+  if ! expanded=$(company_expand_pkg_url "$pkg" "${src[0]}" 2>"$err"); then
+    reason=$(tr '\n' ' ' <"$err")
+    rm -f "$err"
+    company_fail "$name: ${reason:-could not expand source URL}"
+  fi
+  rm -f "$err"
+  [[ "$expanded" == "$url" ]] || company_fail "$name: source URL $expanded is not vendor $url"
+}
+
 verify_one() {
   local name=$1
   local pkg up host pkgver sha source_block url count src_host want vendor format
@@ -89,6 +151,12 @@ verify_one() {
 
   if [[ "$format" == json-name-targz ]]; then
     verify_json_name_targz "$name" "$pkgver" "$sha" "$host"
+    printf 'OK %s %s sha256=%s\n' "$name" "$pkgver" "${sha,,}"
+    return
+  fi
+
+  if [[ "$format" == studio-download-html ]]; then
+    verify_studio_download_html "$name" "$pkgver" "$sha" "$host"
     printf 'OK %s %s sha256=%s\n' "$name" "$pkgver" "${sha,,}"
     return
   fi

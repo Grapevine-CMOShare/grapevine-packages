@@ -186,6 +186,8 @@ company_expand_glob() {
 # (hash the fetched sums_url body; basename is the optional 3rd arg).
 # json-name-targz: sums_url is a JSON object with "name" and "url_targz"
 # (GitKraken RELEASES). Verify/propose hash the tarball; this helper does not.
+# studio-download-html: sums_url is the Android Studio download page. One linux
+# ide-zips tarball URL, and the sha256 printed next to that basename.
 company_sums_format() {
   local up=$1 f
   f=$(company_kv_get "$up" sums_format) || true
@@ -312,6 +314,93 @@ company_json_name_targz_url() {
   printf '%s\n' "$url"
 }
 
+# Substitute ${pkgver} and ${_archive} in one PKGBUILD source URL.
+company_expand_pkg_url() {
+  local pkg=$1 url=$2 pkgver archive
+  pkgver=$(company_pkgbuild_get "$pkg" pkgver)
+  archive=$(company_kv_line "$pkg" _archive)
+  url=${url//\$\{pkgver\}/$pkgver}
+  url=${url//\$pkgver/$pkgver}
+  if [[ "$url" == *'${_archive}'* || "$url" == *'$_archive'* ]]; then
+    [[ -n "$archive" ]] || {
+      echo 'PKGBUILD source uses _archive but _archive= is empty' >&2
+      return 1
+    }
+    url=${url//\$\{_archive\}/$archive}
+    url=${url//\$_archive/$archive}
+  fi
+  if [[ "$url" == *'$'* ]]; then
+    echo "PKGBUILD source URL still has an unexpanded variable: $url" >&2
+    return 1
+  fi
+  printf '%s\n' "$url"
+}
+
+# First KEY= value, or empty. PKGBUILD and upstream files both use this shape.
+company_kv_line() {
+  local file=$1 key=$2
+  company_pkgbuild_get "$file" "$key" || true
+}
+
+# True when basename matches sums_glob (bash pattern, {pkgver} already expanded).
+company_basename_matches_glob() {
+  local base=$1 glob=$2
+  # Right-hand side is a pattern, not a pathname.
+  # shellcheck disable=SC2254
+  [[ "$base" == $glob ]]
+}
+
+# studio-download-html. stdout is four lines: version, url, sha256, basename.
+company_studio_download_linux() {
+  local file=$1
+  local urls url ver base sha n
+  mapfile -t urls < <(grep -oE 'https://[^"'\''[:space:]<>]+/android/studio/ide-zips/[0-9.]+/android-studio-[A-Za-z0-9._-]+-linux\.tar\.gz' "$file" | sort -u || true)
+  n=${#urls[@]}
+  if [[ "$n" -ne 1 ]]; then
+    echo "expected one linux ide-zips URL, found $n" >&2
+    return 1
+  fi
+  url=${urls[0]}
+  ver=$(printf '%s\n' "$url" | sed -n 's|.*/ide-zips/\([0-9.][0-9.]*\)/android-studio-.*|\1|p')
+  [[ "$ver" =~ ^[0-9.]+$ ]] || {
+    echo "linux tarball URL has no numeric version: $url" >&2
+    return 1
+  }
+  base=$(basename "${url%%\?*}")
+  sha=$(awk -v b="$base" '
+    function hex64(s,    m) {
+      if (match(s, /(^|[^0-9A-Fa-f])[0-9A-Fa-f]{64}([^0-9A-Fa-f]|$)/)) {
+        m = substr(s, RSTART, RLENGTH)
+        gsub(/[^0-9A-Fa-f]/, "", m)
+        if (length(m) == 64) {
+          print tolower(m)
+          return 0
+        }
+      }
+      return 1
+    }
+    {
+      if (!seen) {
+        i = index($0, b)
+        if (!i) next
+        seen = 1
+        if (hex64(substr($0, i + length(b))) == 0) { ok = 1; exit 0 }
+        next
+      }
+      if (hex64($0) == 0) { ok = 1; exit 0 }
+    }
+    END { if (!ok) exit 1 }
+  ' "$file") || {
+    echo "no sha256 next to $base" >&2
+    return 1
+  }
+  [[ "$sha" =~ ^[0-9a-f]{64}$ ]] || {
+    echo "no sha256 next to $base" >&2
+    return 1
+  }
+  printf '%s\n' "$ver" "$url" "$sha" "$base"
+}
+
 # SHA-256 of a URL body. Caller already checked scheme and host.
 company_sha256_url() {
   local url=$1 tmp sha
@@ -372,8 +461,8 @@ company_require_upstream() {
   sums_host=$(company_kv_get "$up" sums_host) || true
   sums_format=$(company_sums_format "$up")
   case "$sums_format" in
-    sha256sum|debian-packages|sha256-of-url|json-name-targz) ;;
-    *) company_fail "$name: sums_format must be sha256sum, debian-packages, sha256-of-url, or json-name-targz (got $sums_format)" ;;
+    sha256sum|debian-packages|sha256-of-url|json-name-targz|studio-download-html) ;;
+    *) company_fail "$name: sums_format must be sha256sum, debian-packages, sha256-of-url, json-name-targz, or studio-download-html (got $sums_format)" ;;
   esac
   [[ -n "$host" ]] || company_fail "$name: upstream missing host="
   [[ -n "$sums_url" ]] || company_fail "$name: upstream missing sums_url="
