@@ -6,7 +6,7 @@
 # Bump pkgver + sha256sums from the RELEASES JSON via scripts/propose-update.sh gitkraken.
 
 pkgname=gitkraken
-pkgver=12.5.0
+pkgver=12.6.1
 pkgrel=1
 pkgdesc='The intuitive, fast, and beautiful cross-platform Git client.'
 arch=('x86_64')
@@ -16,7 +16,7 @@ depends=('nss' 'gtk3' 'libsecret' 'libxkbfile')
 optdepends=('git-lfs: git-lfs support'
             'org.freedesktop.secrets: store passwords and encryption keys')
 source=("https://api.gitkraken.dev/releases/production/linux/x64/${pkgver}/gitkraken-amd64.tar.gz")
-sha256sums=('f851909e06751e66072c1b5bdd6ade902f3f37d1dcb7e12522dbbccbf43eaabe')
+sha256sums=('ee3190166d7277f17b4acce5906941beb90fcd5fc00635e36b6728ae10b4afb3')
 options=('!strip' '!debug')
 
 package() {
