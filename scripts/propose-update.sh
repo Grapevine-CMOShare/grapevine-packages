@@ -80,6 +80,97 @@ propose_json_name_targz() {
     "$name" "$latest" "$name"
 }
 
+propose_studio_download_html() {
+  local name=$1
+  local pkg up sums_url sums_glob version_regex host tmp err parsed reason body captured
+  local ver url art_sha base art_host want cur cur_sha cur_archive src expanded rel
+  pkg=$(company_pkgbuild_file "$name")
+  up=$(company_upstream_file "$name")
+  sums_url=$(company_kv_get "$up" sums_url)
+  sums_glob=$(company_kv_get "$up" sums_glob)
+  version_regex=$(company_kv_get "$up" version_regex)
+  host=$(company_kv_get "$up" host)
+  grep -q '^_archive=' "$pkg" || company_fail "$name: PKGBUILD missing _archive="
+  tmp=$(mktemp)
+  err=$(mktemp)
+  parsed=$(mktemp)
+  company_fetch "$sums_url" "$tmp" || {
+    rm -f "$tmp" "$err" "$parsed"
+    company_fail "$name: could not fetch $sums_url"
+  }
+  body=$(tr -d '\n' <"$tmp")
+  if [[ ! "$body" =~ $version_regex ]]; then
+    rm -f "$tmp" "$err" "$parsed"
+    company_fail "$name: version_regex did not match $sums_url"
+  fi
+  captured="${BASH_REMATCH[1]}"
+  if ! company_studio_download_linux "$tmp" >"$parsed" 2>"$err"; then
+    reason=$(tr '\n' ' ' <"$err")
+    rm -f "$tmp" "$err" "$parsed"
+    company_fail "$name: ${reason:-bad Android Studio download page}"
+  fi
+  rm -f "$tmp"
+  {
+    read -r ver
+    read -r url
+    read -r art_sha
+    read -r base
+  } <"$parsed"
+  rm -f "$parsed"
+  [[ -n "$ver" && -n "$url" && -n "$art_sha" && -n "$base" ]] || {
+    rm -f "$err"
+    company_fail "$name: bad Android Studio download page"
+  }
+  if [[ "$captured" != "$ver" ]]; then
+    rm -f "$err"
+    company_fail "$name: version_regex captured $captured but download page version is $ver"
+  fi
+  if [[ "$url" != file://* ]]; then
+    art_host=$(company_url_host "$url")
+    company_host_ok "$art_host" "$host" || {
+      rm -f "$err"
+      company_fail "$name: artifact host $art_host is not $host"
+    }
+  fi
+  company_url_scheme_ok "$url" || {
+    rm -f "$err"
+    company_fail "$name: artifact URL must be https:// (got $url)"
+  }
+  want=$(company_expand_glob "$sums_glob" "$ver")
+  company_basename_matches_glob "$base" "$want" || {
+    rm -f "$err"
+    company_fail "$name: artifact basename $base is not $want"
+  }
+  mapfile -t src < <(company_source_urls "$pkg")
+  if ! expanded=$(company_expand_pkg_url "$pkg" "${src[0]}" 2>"$err"); then
+    reason=$(tr '\n' ' ' <"$err")
+    rm -f "$err"
+    company_fail "$name: ${reason:-could not expand source URL}"
+  fi
+  rm -f "$err"
+  cur=$(company_pkgbuild_get "$pkg" pkgver)
+  cur_sha=$(company_pkgbuild_get "$pkg" sha256sums)
+  cur_archive=$(company_pkgbuild_get "$pkg" _archive)
+  if [[ "$cur" == "$ver" && "${cur_sha,,}" == "$art_sha" && "$cur_archive" == "$base" && "$expanded" == "$url" ]]; then
+    printf 'CURRENT %s %s\n' "$name" "$ver"
+    return 0
+  fi
+  # Same version with a new slug or hash is a rebuild. A new version starts at pkgrel=1.
+  if [[ "$cur" == "$ver" ]]; then
+    rel=$(company_pkgbuild_get "$pkg" pkgrel)
+    rel=$(( ${rel:-0} + 1 ))
+  else
+    rel=1
+  fi
+  sed -i "s/^pkgver=.*/pkgver=$ver/" "$pkg"
+  sed -i "s/^pkgrel=.*/pkgrel=$rel/" "$pkg"
+  sed -i "s/^_archive=.*/_archive=$base/" "$pkg"
+  sed -i "s/^sha256sums=.*/sha256sums=('${art_sha}')/" "$pkg"
+  printf 'UPDATED %s %s -> %s\n' "$name" "$cur" "$ver"
+  printf 'next: git checkout -b bump-%s-%s && git add packages/%s/PKGBUILD && git commit && gh pr create\n' \
+    "$name" "$ver" "$name"
+}
+
 propose_one() {
   local name=$1
   local pkg up sums_url sums_glob version_regex tmp latest cur sha want format norm url_base
@@ -93,6 +184,11 @@ propose_one() {
 
   if [[ "$format" == json-name-targz ]]; then
     propose_json_name_targz "$name"
+    return
+  fi
+
+  if [[ "$format" == studio-download-html ]]; then
+    propose_studio_download_html "$name"
     return
   fi
 

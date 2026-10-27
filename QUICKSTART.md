@@ -1,10 +1,10 @@
 # QUICKSTART
 
-Signed `[company]` pacman repo for vendor apps Arch does not ship (Keeper, Slack, Brother HL-L9310CDW, GitKraken). **Not** AUR. Git is **public** so `pacman` can anonymous-GET Releases.
+Signed `[company]` pacman repo for vendor apps Arch does not ship (Keeper, Slack, Brother HL-L9310CDW, GitKraken, Android Studio). **Not** AUR. Git is **public** so `pacman` can anonymous-GET Releases.
 
 ```bash
 sudo ./scripts/enable-repo.sh
-sudo pacman -S keeper-password-manager slack-desktop gitkraken
+sudo pacman -S keeper-password-manager slack-desktop gitkraken android-studio
 ```
 
 `Server=` is `https://github.com/lateralcoders/zute-packages/releases/latest/download`. Day-one USB copies only the enable kit (script + public key). Packages stay on GitHub, not the stick.

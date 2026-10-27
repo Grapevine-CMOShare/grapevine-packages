@@ -5,3 +5,4 @@ slack-desktop
 brother-hll9310cdw-lpr
 brother-hll9310cdw-cups
 gitkraken
+android-studio
