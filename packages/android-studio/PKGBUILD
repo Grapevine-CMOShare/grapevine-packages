@@ -6,8 +6,8 @@
 # Bump pkgver, _archive, and sha256sums via scripts/propose-update.sh android-studio.
 
 pkgname=android-studio
-pkgver=2026.2.1.8
-_archive=android-studio-rabbit1-linux.tar.gz
+pkgver=2026.2.2.8
+_archive=android-studio-rabbit2-linux.tar.gz
 pkgrel=1
 pkgdesc='The official Android IDE (stable channel).'
 arch=('x86_64')
@@ -22,7 +22,7 @@ optdepends=('gtk2: GTK+ look and feel'
             'ncurses5-compat-libs: native debugger support'
             'vulkan-icd-loader: Vulkan acceleration for Gemini local models')
 source=("https://edgedl.me.gvt1.com/android/studio/ide-zips/${pkgver}/${_archive}")
-sha256sums=('f8775c67cf899d9133712a2d7ee3ef7231e07fb16dbe0544c47e5f5babd5931b')
+sha256sums=('b47fdcc0703019618a7afd5ad1822cafc5de66bed984640be2977a0fdb538304')
 options=('!strip' '!debug')
 
 package() {
