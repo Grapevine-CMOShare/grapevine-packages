@@ -4,7 +4,7 @@
 # Do not copy PKGBUILDs from aur.archlinux.org.
 
 pkgname=slack-desktop
-pkgver=4.52.182
+pkgver=4.53.292
 pkgrel=1
 pkgdesc='Slack Desktop (vendor .deb wrapper).'
 arch=('x86_64')
@@ -13,7 +13,7 @@ license=('LicenseRef-Slack')
 depends=('gtk3' 'nss' 'libxss' 'libsecret' 'libnotify' 'xdg-utils' 'libxtst' 'at-spi2-core')
 optdepends=('libappindicator-gtk3: tray icon')
 source=("https://downloads.slack-edge.com/desktop-releases/linux/x64/${pkgver}/slack-desktop-${pkgver}-amd64.deb")
-sha256sums=('568f9e76a143a5ead69645192e38131897f85af7645d7d81897f36fdaac8f700')
+sha256sums=('c6316a7d15ebc17527a287f88aa27bed89869b15f32c5abe610475c134c910fd')
 
 package() {
   bsdtar -xf data.tar.* -C "$pkgdir"
